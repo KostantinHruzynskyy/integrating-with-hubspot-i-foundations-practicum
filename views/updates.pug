@@ -1,0 +1,15 @@
+doctype html
+html(lang="en")
+  head
+    title= title
+    link(rel="stylesheet", href="/css/style.css")
+  body
+    h1 Add a New Record
+    a(href="/") Return to the homepage
+
+    form(action="/update-cobj", method="POST")
+      each prop in properties
+        div.form-group
+          label(for=prop)= prop
+          input(type="text", id=prop, name=prop, required=(prop === 'name'))
+      button(type="submit") Submit

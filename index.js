@@ -1,71 +1,94 @@
 const express = require('express');
 const axios = require('axios');
+require('dotenv').config();
+
 const app = express();
 
 app.set('view engine', 'pug');
 app.use(express.static(__dirname + '/public'));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
 
-// * Please DO NOT INCLUDE the private app access token in your repo. Don't do this practicum in your normal account.
-const PRIVATE_APP_ACCESS = '';
+const PRIVATE_APP_ACCESS_TOKEN = process.env.PRIVATE_APP_ACCESS_TOKEN;
 
-// TODO: ROUTE 1 - Create a new app.get route for the homepage to call your custom object data. Pass this data along to the front-end and create a new pug template in the views folder.
+// The custom object type identifier as it appears in the HubSpot API,
+// e.g. "2-123456" (the object's typeId) or a custom name like "plants".
+// Set this in your .env file once you've created the custom object.
+const CUSTOM_OBJECT_TYPE = process.env.CUSTOM_OBJECT_TYPE || 'plants';
 
-// * Code for Route 1 goes here
+// The list of custom property internal names to read/write on the object.
+// "name" is required by the practicum; add your other two here to match
+// whatever you set up in HubSpot.
+const CUSTOM_PROPERTIES = ['name', 'species', 'watering_frequency'];
 
-// TODO: ROUTE 2 - Create a new app.get route for the form to create or update new custom object data. Send this data along in the next route.
+/**
+ * Route 1: Homepage
+ * GET request to retrieve all custom object records, then render them
+ * in an HTML table via the homepage Pug template.
+ */
+app.get('/', async (req, res) => {
+  const propertiesParam = CUSTOM_PROPERTIES.join(',');
+  const url = `https://api.hubapi.com/crm/v3/objects/${CUSTOM_OBJECT_TYPE}?properties=${propertiesParam}`;
 
-// * Code for Route 2 goes here
+  try {
+    const resp = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${PRIVATE_APP_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-// TODO: ROUTE 3 - Create a new app.post route for the custom objects form to create or update your custom object data. Once executed, redirect the user to the homepage.
-
-// * Code for Route 3 goes here
-
-/** 
-* * This is sample code to give you a reference for how you should structure your calls. 
-
-* * App.get sample
-app.get('/contacts', async (req, res) => {
-    const contacts = 'https://api.hubspot.com/crm/v3/objects/contacts';
-    const headers = {
-        Authorization: `Bearer ${PRIVATE_APP_ACCESS}`,
-        'Content-Type': 'application/json'
-    }
-    try {
-        const resp = await axios.get(contacts, { headers });
-        const data = resp.data.results;
-        res.render('contacts', { title: 'Contacts | HubSpot APIs', data });      
-    } catch (error) {
-        console.error(error);
-    }
+    const records = resp.data.results;
+    res.render('homepage', {
+      title: 'Custom Object Homepage | Integrating With HubSpot I Practicum',
+      records: records,
+      properties: CUSTOM_PROPERTIES,
+    });
+  } catch (err) {
+    console.error(err.response ? err.response.data : err.message);
+    res.status(500).send('Error retrieving records from HubSpot.');
+  }
 });
 
-* * App.post sample
-app.post('/update', async (req, res) => {
-    const update = {
-        properties: {
-            "favorite_book": req.body.newVal
-        }
-    }
-
-    const email = req.query.email;
-    const updateContact = `https://api.hubapi.com/crm/v3/objects/contacts/${email}?idProperty=email`;
-    const headers = {
-        Authorization: `Bearer ${PRIVATE_APP_ACCESS}`,
-        'Content-Type': 'application/json'
-    };
-
-    try { 
-        await axios.patch(updateContact, update, { headers } );
-        res.redirect('back');
-    } catch(err) {
-        console.error(err);
-    }
-
+/**
+ * Route 2: Update form (GET)
+ * Renders a Pug template with an HTML form for creating a new record.
+ */
+app.get('/update-cobj', (req, res) => {
+  res.render('updates', {
+    title: 'Update Custom Object Form | Integrating With HubSpot I Practicum',
+    properties: CUSTOM_PROPERTIES,
+  });
 });
-*/
 
+/**
+ * Route 3: Update form (POST)
+ * Takes the submitted form data, creates a new CRM record via the
+ * HubSpot API, then redirects back to the homepage.
+ */
+app.post('/update-cobj', async (req, res) => {
+  const url = `https://api.hubapi.com/crm/v3/objects/${CUSTOM_OBJECT_TYPE}`;
 
-// * Localhost
+  const properties = {};
+  CUSTOM_PROPERTIES.forEach((prop) => {
+    properties[prop] = req.body[prop];
+  });
+
+  try {
+    await axios.post(
+      url,
+      { properties },
+      {
+        headers: {
+          Authorization: `Bearer ${PRIVATE_APP_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    res.redirect('/');
+  } catch (err) {
+    console.error(err.response ? err.response.data : err.message);
+    res.status(500).send('Error creating record in HubSpot.');
+  }
+});
+
 app.listen(3000, () => console.log('Listening on http://localhost:3000'));
